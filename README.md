@@ -12,6 +12,15 @@ To repo zawiera 2 tryby:
    - Semgrep uruchamia się ponownie
    - pipeline przechodzi dalej
 
+GitHub Actions zawiera również dwa gotowe scenariusze SAST:
+
+- SQL injection w `app_vuln/UserController.java`;
+- command injection w `app_command_vuln/CommandController.java`.
+
+Bezpieczne wersje znajdują się odpowiednio w `app_fixed/` i
+`app_command_fixed/`. Workflow skanuje katalog `app/` wszystkimi lokalnymi
+regułami z `rules/`.
+
 ## Wymagania
 
 - semgrep
@@ -111,6 +120,19 @@ PR-y z forków i uruchomienia przez Dependabot są pomijane. Nie używamy
 4. Przywróć poprawkę przez `cp app_fixed/UserController.java app/UserController.java`,
    zacommituj i wypchnij. Komentarz zostanie zaktualizowany dla nowego commita.
 
+Alternatywny scenariusz command injection:
+
+```bash
+cp app_command_vuln/CommandController.java app/CommandController.java
+# commit, push i utworzenie PR-a
+
+cp app_command_fixed/CommandController.java app/CommandController.java
+# commit i push poprawki
+```
+
+Podatna wersja przekazuje `host` do `sh -c`. Poprawiona wersja nie uruchamia
+powłoki i korzysta z `InetAddress.isReachable`.
+
 Model może przeoczyć błąd albo zgłosić nietrafioną uwagę. Wynik prezentacji
 nie jest deterministyczny. Semgrep i Conftest działają niezależnie;
 `demo.yml` uruchamia Semgrep z lokalną regułą i `--error` przy PR-ach oraz pushach do `main`.
@@ -132,8 +154,8 @@ nie jest deterministyczny. Semgrep i Conftest działają niezależnie;
   To ogranicza skutki prompt injection, ale nie gwarantuje poprawności review.
 - Komentarz zawiera SHA analizowanego commita. Skrypt sprawdza aktualność PR-a
   przed analizą i publikacją; kolejne uruchomienia dla tego PR-a anulują poprzednie.
-- Celowo podatne przykłady w `app_vuln/` i `vuln/` są oznaczone w instrukcji
-  modelu jako materiał demonstracyjny.
+- Celowo podatne przykłady w `app_vuln/`, `app_command_vuln/` i `vuln/` są
+  oznaczone w instrukcji modelu jako materiał demonstracyjny.
 - Skrypt używa standardowej biblioteki Pythona 3.10+, bez dodatkowych pakietów.
 
 Nie zapisuj klucza w `pipeline_ai_fix.sh`; skrypt pobiera go teraz ze środowiska.

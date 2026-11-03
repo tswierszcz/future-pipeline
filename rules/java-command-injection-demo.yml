@@ -1,0 +1,6 @@
+rules:
+  - id: java-command-injection-demo
+    message: Possible OS command injection through a shell command
+    severity: ERROR
+    languages: [java]
+    pattern: new ProcessBuilder("sh", "-c", "..." + $INPUT).start()
