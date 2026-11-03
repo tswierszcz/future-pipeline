@@ -1,0 +1,30 @@
+name: demo-pipeline
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  security-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Semgrep
+        run: pip install semgrep
+
+      - name: Run Semgrep
+        run: semgrep scan --config auto app/
+
+      - name: Install Conftest
+        run: |
+          wget -qO- https://github.com/open-policy-agent/conftest/releases/latest/download/conftest_Linux_x86_64.tar.gz | tar xz
+          sudo mv conftest /usr/local/bin
+
+      - name: Run policy checks
+        run: conftest test infra/deployment.yaml --policy policies/

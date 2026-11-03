@@ -1,0 +1,12 @@
+rules:
+  - id: java-sqli-demo
+    message: Possible SQL injection via Statement.executeQuery
+    severity: ERROR
+    languages: [java]
+    patterns:
+      - pattern: |
+          String $Q = "..." + $X;
+          ...
+          $S = $C.createStatement();
+          ...
+          $S.executeQuery($Q);
