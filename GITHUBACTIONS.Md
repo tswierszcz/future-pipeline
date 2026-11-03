@@ -3,6 +3,27 @@
 Instrukcja dla prowadzącego. Czas prezentacji: około 15–20 minut,
 plus czas oczekiwania na workflow. Konfigurację i próbę wykonaj wcześniej.
 
+## 0. Stan zweryfikowany przed prezentacją
+
+Pełna próba została wykonana 3 listopada 2026 w repozytorium
+[`tswierszcz/future-pipeline`](https://github.com/tswierszcz/future-pipeline):
+
+- sekret `OPENAI_API_KEY` jest skonfigurowany;
+- model `gpt-4.1-mini` odpowiedział przez API OpenAI;
+- [PR #1](https://github.com/tswierszcz/future-pipeline/pull/1) jest otwarty
+  i pozostawiony w bezpiecznym stanie;
+- [Semgrep zablokował podatny commit](https://github.com/tswierszcz/future-pipeline/actions/runs/41638698187);
+- [AI wykryło SQL injection jako High](https://github.com/tswierszcz/future-pipeline/actions/runs/41638698154),
+  opisało scenariusz ataku i zaproponowało `PreparedStatement`;
+- po poprawce [Semgrep i Conftest przeszły](https://github.com/tswierszcz/future-pipeline/actions/runs/41639110472),
+  a [review AI również zakończyło się powodzeniem](https://github.com/tswierszcz/future-pipeline/actions/runs/41639110555).
+
+Aktualny [komentarz AI w PR #1](https://github.com/tswierszcz/future-pipeline/pull/1#issuecomment-6604138103)
+dotyczy poprawionej wersji. Skrypt utrzymuje jeden komentarz i aktualizuje go
+przy kolejnym commicie, dlatego treść analizy podatnego commita została zastąpiona.
+Podczas prezentacji pokaż podatną analizę **przed** wysłaniem poprawki albo
+wcześniej przygotuj jej zrzut ekranu.
+
 ## 1. Co pokazujemy
 
 Historia demonstracji:
@@ -109,6 +130,23 @@ W repozytorium na GitHubie:
 4. Opcjonalnie w **Variables** dodaj `OPENAI_REVIEW_MODEL`.
    Bez tej zmiennej skrypt używa `gpt-4.1-mini`.
 
+Alternatywnie ustaw sekret interaktywnie przez GitHub CLI. Polecenie poprosi
+o wartość; nie wpisuj klucza wprost w historii poleceń:
+
+```bash
+gh secret set OPENAI_API_KEY --repo tswierszcz/future-pipeline
+gh secret list --repo tswierszcz/future-pipeline
+```
+
+Drugie polecenie pokazuje nazwę i datę aktualizacji sekretu, ale nie jego wartość.
+Jeśli chcesz jawnie ustawić model używany w review:
+
+```bash
+gh variable set OPENAI_REVIEW_MODEL \
+  --body "gpt-4.1-mini" \
+  --repo tswierszcz/future-pipeline
+```
+
 Nie pokazuj wartości klucza na ekranie. Wcześniej zapisany w kodzie
 prawdziwy klucz trzeba unieważnić; samo usunięcie z aktualnego pliku
 nie usuwa go z historii. Nie wypychaj historii zawierającej aktywne sekrety.
@@ -176,13 +214,17 @@ Czerwony job i wymagana kontrola blokująca merge to dwie różne rzeczy.
 ### 3.4. Próba techniczna
 
 - Potwierdź zielony pipeline na bezpiecznym `app/` na `main`.
-- Wykonaj próbny PR; sprawdź komentarz AI i jego SHA.
-- Sprawdź dostępność modelu, środki i limity konta API.
-- Sprawdź instalację Conftest. Jeśli krok pobierania wydania nie działa,
-  popraw go i przetestuj przed prezentacją.
+- Otwórz [próbny PR #1](https://github.com/tswierszcz/future-pipeline/pull/1)
+  i potwierdź, że końcowy commit oraz kontrole nadal są zielone.
+- Sprawdź, czy komentarz AI wskazuje ten sam SHA co głowa PR-a.
+- Sprawdź dostępność modelu, środki i limity konta API. Obecność sekretu
+  nie gwarantuje, że klucz jest ważny albo konto ma dostęp do modelu.
+- Sprawdź instalację przypiętego Conftest 0.71.1 i Semgrep 1.183.0.
 - Otwórz w przeglądarce karty: kod repozytorium, **Pull requests**, **Actions**.
-- Zachowaj zrzut lub gotowy próbny PR z wynikiem na wypadek niedostępności usług.
-- Zamknij próbny PR i użyj innej nazwy gałęzi dla właściwego pokazu.
+- Zachowaj zrzuty podatnego komentarza AI, czerwonego Semgrep i końcowego
+  zielonego pipeline'u na wypadek niedostępności usług.
+- PR #1 może pozostać otwarty jako próba techniczna. Do właściwego pokazu
+  użyj nowej gałęzi, aby historia była czytelna dla publiczności.
 
 ## 4. Scenariusz na żywo
 
@@ -241,9 +283,15 @@ Celowo podatnego PR-a nie scalaj.
 5. Wróć do **Conversation** PR-a. Pokaż jeden komentarz `AI review`,
    analizowany commit i sugestię użycia `PreparedStatement`, jeśli model ją podał.
 
+W próbie z 3 listopada 2026 model oznaczył SQL injection jako **High**, podał
+przykładowe wejście `1 OR 1=1` i zaproponował parametryzację zapytania.
+To zaobserwowany wynik jednej próby, a nie gwarantowany format kolejnej odpowiedzi.
+
 Wynik AI jest niedeterministyczny. Nie obiecuj identycznej treści ani
 wykrycia problemu za każdym razem. Review pojawia się jako komentarz
 w rozmowie, nie jako formalne „Approve” lub komentarze przypięte do linii.
+Model może też odpowiedzieć po angielsku mimo prośby o język polski albo
+opakować wynik w blok Markdown. Nie wpływa to na działanie workflow.
 Semgrep wypisuje wynik w logu kroku; nie publikujemy tu automatycznie SARIF
 ani osobnego komentarza Semgrep.
 
@@ -259,6 +307,7 @@ Na tej samej gałęzi:
 
 ```bash
 cp app_fixed/UserController.java app/UserController.java
+sed -i '/stmt.setString/i\        // Bind user input as a SQL parameter.' app/UserController.java
 git diff -- app/UserController.java
 git add app/UserController.java
 git commit -m "demo: fix SQL injection with PreparedStatement"
@@ -275,6 +324,12 @@ Sprawdź nowe uruchomienia **Actions**:
   a instalacja narzędzia działa.
 - Komentarz AI powinien zostać zaktualizowany i wskazywać nowy SHA.
 
+W sprawdzonej próbie AI potwierdziło brak SQL injection, ale zgłosiło również
+zarządzanie zasobami JDBC, walidację wejścia i brak widocznej autoryzacji.
+Te uwagi nie muszą być błędne, jednak model widzi tylko diff i nie zna całej
+architektury. Wykorzystaj to jako przykład ograniczenia review AI: człowiek
+musi odróżnić błąd w zmianie od hipotezy wymagającej szerszego kontekstu.
+
 **Pułapka pustego diffu:** jeśli plik po poprawce jest identyczny z plikiem
 na `main` i w PR-ze nie ma innych zmian, diff PR-a będzie pusty.
 Skrypt zaktualizuje komentarz informacją, że analiza AI nie została wykonana.
@@ -283,6 +338,11 @@ Jeżeli chcesz pokazać drugie wywołanie AI, przed commitem dodaj do poprawione
 metody krótki, sensowny komentarz, np. `// Bind user input as a SQL parameter.`
 Wtedy PR zachowa niepusty diff względem bazy. Model ocenia bieżący diff PR-a,
 a nie wyłącznie ostatni commit i nie historię kolejnych poprawek.
+
+Po aktualizacji komentarza poprzednia analiza podatnej wersji przestanie być
+widoczna jako bieżąca treść komentarza. Dlatego omów ją przed wykonaniem `git push`
+z poprawką. Pojedynczy aktualizowany komentarz ogranicza bałagan w PR-ze,
+ale nie służy jako trwałe archiwum kolejnych odpowiedzi modelu.
 
 Nie mów, że AI naprawiło plik: w tym scenariuszu poprawkę wprowadziłeś ręcznie.
 
@@ -332,6 +392,9 @@ Conftest, a workflow nie wdraża go do klastra Kubernetes.
 | SQL injection, ale Semgrep zielony | Sprawdź `--error`, lokalną regułę, skanowanie `app/` oraz SHA uruchomienia. |
 | Błąd pobierania Conftest | Sprawdź log instalacji i adres wydania; to nie wynik polityki. |
 | Brak ponownej analizy AI po poprawce | Sprawdź, czy PR ma jeszcze niepusty diff względem bazy. |
+| AI odpowiada po angielsku lub używa nieoczekiwanego formatu | To możliwy wynik modelu; oceniaj treść, a nie układ odpowiedzi. |
+| Po poprawce zniknęła analiza podatności | Skrypt aktualizuje jeden komentarz. Pokaż wcześniejszy wynik przed pushem lub użyj przygotowanego zrzutu. |
+| AI zgłasza autoryzację lub walidację niewidoczną w diffie | Zaznacz ograniczony kontekst i potraktuj uwagę jako pytanie do człowieka, nie dowiedziony błąd. |
 
 Przy awarii usługi pokaż wynik wcześniej przygotowanej próby,
 wyraźnie zaznaczając, że pochodzi z poprzedniego uruchomienia.
@@ -351,12 +414,14 @@ w osobnym `ai_fix.py`, a nie w `ai_review.py`.
 ## 8. Ściąga dla prowadzącego
 
 1. Przed pokazem: workflow i reviewer na `main`, sekret dodany, próba udana.
-2. Pokaż YAML i polecenie `python3 ai_review.py`.
-3. Nowa gałąź → skopiuj `app_vuln` do `app` → commit → push → PR.
-4. Pokaż log Semgrep i komentarz AI.
-5. Skopiuj `app_fixed` do `app` → commit → push.
-6. Pokaż nowe wyniki, aktualny SHA i ewentualny pusty diff.
-7. Zamknij PR bez scalania.
+2. Otwórz awaryjne materiały z PR #1 w osobnych kartach.
+3. Pokaż YAML i polecenie `python3 ai_review.py`.
+4. Nowa gałąź → skopiuj `app_vuln` do `app` → commit → push → PR.
+5. Pokaż czerwony Semgrep oraz komentarz AI **przed wysłaniem poprawki**.
+6. Skopiuj `app_fixed` do `app`, dodaj komentarz zachowujący diff → commit → push.
+7. Pokaż zielone Semgrep i Conftest, nowy SHA oraz zaktualizowany komentarz AI.
+8. Omów dodatkowe uwagi AI jako przykład ograniczonego kontekstu.
+9. Zamknij demonstracyjny PR bez scalania.
 
 Materiały:
 
