@@ -2,11 +2,17 @@ name: demo-pipeline
 
 on:
   push:
+    branches: [main]
+  pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   security-pipeline:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -16,15 +22,18 @@ jobs:
           python-version: "3.11"
 
       - name: Install Semgrep
-        run: pip install semgrep
+        run: python3 -m pip install semgrep==1.183.0
 
       - name: Run Semgrep
-        run: semgrep scan --config auto app/
+        run: semgrep scan --error --config rules/java-sqli-demo.yml app/
 
       - name: Install Conftest
         run: |
-          wget -qO- https://github.com/open-policy-agent/conftest/releases/latest/download/conftest_Linux_x86_64.tar.gz | tar xz
-          sudo mv conftest /usr/local/bin
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/conftest.tar.gz" \
+            https://github.com/open-policy-agent/conftest/releases/download/v0.71.1/conftest_0.71.1_Linux_x86_64.tar.gz
+          tar -xzf "$RUNNER_TEMP/conftest.tar.gz" -C "$RUNNER_TEMP" conftest
+          sudo install -m 0755 "$RUNNER_TEMP/conftest" /usr/local/bin/conftest
+          conftest --version
 
       - name: Run policy checks
-        run: conftest test infra/deployment.yaml --policy policies/
+        run: conftest test --rego-version v1 infra/deployment.yaml --policy policies/

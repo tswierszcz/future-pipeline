@@ -113,7 +113,7 @@ PR-y z forków i uruchomienia przez Dependabot są pomijane. Nie używamy
 
 Model może przeoczyć błąd albo zgłosić nietrafioną uwagę. Wynik prezentacji
 nie jest deterministyczny. Semgrep i Conftest działają niezależnie;
-obecny `demo.yml` nadal uruchamia Semgrep bez `--error` i ta zmiana tego nie modyfikuje.
+`demo.yml` uruchamia Semgrep z lokalną regułą i `--error` przy PR-ach oraz pushach do `main`.
 
 ### Zakres i ograniczenia
 

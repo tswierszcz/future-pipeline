@@ -126,15 +126,13 @@ PR-y z forków, drafty i uruchomienia przez Dependabot są pomijane.
 
 ### 3.3. Przygotowanie czerwonej kontroli Semgrep
 
-**Stan obecny:** `demo.yml` reaguje na `push` i uruchomienie ręczne.
-Skanuje przez `--config auto`, bez `--error`. Nie obiecuj publiczności,
-że samo wykrycie podatności spowoduje czerwony wynik w tej konfiguracji.
+**Stan obecny:** konfiguracja opisana poniżej jest już zastosowana w `demo.yml`.
+Semgrep reaguje na PR-y i pushe do `main`, używa lokalnej reguły oraz `--error`.
+Instalacja jest przypięta do Semgrep 1.183.0 i Conftest 0.71.1;
+adres archiwum Conftest zawiera numer wersji. Poniższe fragmenty służą
+weryfikacji ustawień, nie wymagają ponownego edytowania pliku.
 
-Do scenariusza z blokującą kontrolą przygotuj przed pokazem poniższe
-zmiany w `.github/workflows/demo.yml` i scal je do `main`.
-To instrukcja zmiany konfiguracji — ten dokument sam nie modyfikuje workflow.
-
-Zastąp sekcję zdarzeń taką konfiguracją:
+Sekcja zdarzeń:
 
 ```yaml
 on:
@@ -147,7 +145,7 @@ on:
 Ograniczenie `push` do `main` pozwala uniknąć dwóch skanów tej samej
 zmiany: jednego z pushu gałęzi i drugiego z PR-a.
 
-W kroku **Run Semgrep** ustaw:
+Krok **Run Semgrep**:
 
 ```yaml
       - name: Run Semgrep
@@ -157,7 +155,7 @@ W kroku **Run Semgrep** ustaw:
 Lokalna reguła daje kontrolowany przykład bez pobierania reguł `auto`.
 Flaga `--error` powoduje nieudany krok po wykryciu problemu.
 
-W kroku **Run policy checks** użyj:
+Krok **Run policy checks**:
 
 ```yaml
       - name: Run policy checks
