@@ -1,8 +1,9 @@
 import java.io.IOException;
+import java.net.InetAddress;
 
 public class CommandController {
-    public boolean isReachable(String host) throws IOException, InterruptedException {
-        Process process = new ProcessBuilder("sh", "-c", "ping -c 1 " + host).start();
-        return process.waitFor() == 0;
+    public boolean isReachable(String host) throws IOException {
+        InetAddress address = InetAddress.getByName(host);
+        return address.isReachable(2000);
     }
 }
