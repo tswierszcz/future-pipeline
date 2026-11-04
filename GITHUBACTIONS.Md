@@ -24,11 +24,22 @@ przy kolejnym commicie, dlatego treść analizy podatnego commita została zast�
 Podczas prezentacji pokaż podatną analizę **przed** wysłaniem poprawki albo
 wcześniej przygotuj jej zrzut ekranu.
 
+Scenariusz command injection został następnie sprawdzony w
+[PR #3](https://github.com/tswierszcz/future-pipeline/pull/3):
+
+- [Semgrep zablokował `sh -c` z wejściem użytkownika](https://github.com/tswierszcz/future-pipeline/actions/runs/41726140257);
+- [AI oznaczyło command injection jako błąd krytyczny](https://github.com/tswierszcz/future-pipeline/actions/runs/41726140385)
+  i zaleciło użycie `InetAddress.isReachable`;
+- po przywróceniu bezpiecznej wersji [wszystkie kontrole przeszły](https://github.com/tswierszcz/future-pipeline/actions/runs/41726783704).
+
+Command injection jest głównym scenariuszem opisanym poniżej. SQL injection
+pozostaje dostępną alternatywą.
+
 ## 1. Co pokazujemy
 
 Historia demonstracji:
 
-1. Programista wprowadza SQL injection i otwiera pull request.
+1. Programista wprowadza command injection i otwiera pull request.
 2. GitHub uruchamia automatyczne kontrole na tymczasowych maszynach Ubuntu.
 3. Semgrep wykrywa niebezpieczny wzorzec.
 4. AI publikuje komentarz z wyjaśnieniem i propozycją poprawki.
@@ -48,10 +59,12 @@ Zdanie otwierające prezentację:
 | `.github/workflows/demo.yml` | Instalacja i uruchomienie Semgrep oraz Conftest |
 | `.github/workflows/ai-review.yml` | Uruchomienie doradczego review dla PR-a |
 | `ai_review.py` | Pobranie diffu, wywołanie OpenAI, aktualizacja komentarza |
-| `app/UserController.java` | Kod roboczy, który zmieniamy w PR-ze |
-| `app_vuln/UserController.java` | Gotowy przykład SQL injection |
-| `app_fixed/UserController.java` | Poprawka z `PreparedStatement` |
-| `rules/java-sqli-demo.yml` | Lokalna reguła Semgrep dla przykładu |
+| `app/CommandController.java` | Kod roboczy command injection, który zmieniamy w PR-ze |
+| `app_command_vuln/CommandController.java` | Wersja podatna, używająca `sh -c` |
+| `app_command_fixed/CommandController.java` | Poprawka bez uruchamiania powłoki |
+| `rules/java-command-injection-demo.yml` | Lokalna reguła Semgrep dla command injection |
+| `app_vuln/` i `app_fixed/` | Alternatywny scenariusz SQL injection |
+| `rules/java-sqli-demo.yml` | Lokalna reguła Semgrep dla SQL injection |
 | `infra/deployment.yaml` | Manifest sprawdzany przez Conftest |
 | `policies/deployment.rego` | Wymagane limity CPU i pamięci |
 
@@ -92,6 +105,8 @@ repozytorium/
   .github/workflows/ai-review.yml
   ai_review.py
   app/
+  app_command_fixed/
+  app_command_vuln/
   app_fixed/
   app_vuln/
   infra/
@@ -113,6 +128,7 @@ Na gałęzi bazowej przygotuj bezpieczny punkt startowy:
 git switch main
 git pull --ff-only origin main
 cp app_fixed/UserController.java app/UserController.java
+cp app_command_fixed/CommandController.java app/CommandController.java
 ```
 
 Przygotowane workflow, skrypt review, reguły i bezpieczny plik aplikacji
@@ -187,11 +203,12 @@ Krok **Run Semgrep**:
 
 ```yaml
       - name: Run Semgrep
-        run: semgrep scan --error --config rules/java-sqli-demo.yml app/
+        run: semgrep scan --error --config rules/ app/
 ```
 
-Lokalna reguła daje kontrolowany przykład bez pobierania reguł `auto`.
-Flaga `--error` powoduje nieudany krok po wykryciu problemu.
+Lokalne reguły dają kontrolowane przykłady bez pobierania reguł `auto`.
+Semgrep uruchamia obie reguły z katalogu `rules/`, a flaga `--error`
+powoduje nieudany krok po wykryciu problemu.
 
 Krok **Run policy checks**:
 
@@ -252,22 +269,24 @@ W terminalu:
 ```bash
 git switch main
 git pull --ff-only origin main
-git switch -c demo/sql-injection-review
-cp app_vuln/UserController.java app/UserController.java
-git diff -- app/UserController.java
-git add app/UserController.java
-git commit -m "demo: introduce SQL injection for security review"
-git push -u origin demo/sql-injection-review
+git switch -c demo/command-injection-review
+cp app_command_vuln/CommandController.java app/CommandController.java
+git diff -- app/CommandController.java
+git add app/CommandController.java
+git commit -m "demo: introduce command injection for security review"
+git push -u origin demo/command-injection-review
 ```
 
-Pokaż konkatenację `userId` do zapytania SQL i użycie `Statement`.
-Wyjaśnij, że wejście użytkownika zaczyna wpływać na składnię zapytania.
+Pokaż `ProcessBuilder("sh", "-c", "ping -c 1 " + host)`.
+Wyjaśnij, że `host` pochodzi od użytkownika i staje się częścią polecenia
+interpretowanego przez powłokę. Przykład `127.0.0.1; id` może uruchomić
+dodatkowe polecenie. Nie wykonuj podatnego kodu podczas prezentacji.
 
 Na GitHubie otwórz **Pull requests → New pull request**:
 
 - base: `main`;
-- compare: `demo/sql-injection-review`;
-- tytuł: `Demo: SQL injection wykryte przez Semgrep i AI`;
+- compare: `demo/command-injection-review`;
+- tytuł: `Demo: command injection wykryte przez Semgrep i AI`;
 - zwykły PR, nie draft.
 
 Celowo podatnego PR-a nie scalaj.
@@ -283,8 +302,9 @@ Celowo podatnego PR-a nie scalaj.
 5. Wróć do **Conversation** PR-a. Pokaż jeden komentarz `AI review`,
    analizowany commit i sugestię użycia `PreparedStatement`, jeśli model ją podał.
 
-W próbie z 3 listopada 2026 model oznaczył SQL injection jako **High**, podał
-przykładowe wejście `1 OR 1=1` i zaproponował parametryzację zapytania.
+W próbie z 3 listopada 2026 model oznaczył command injection jako błąd
+**krytyczny**, opisał możliwość wykonania dodatkowego polecenia i zalecił
+rezygnację z `sh -c` na rzecz `InetAddress.isReachable`.
 To zaobserwowany wynik jednej próby, a nie gwarantowany format kolejnej odpowiedzi.
 
 Wynik AI jest niedeterministyczny. Nie obiecuj identycznej treści ani
@@ -306,16 +326,17 @@ Komentarz do powiedzenia:
 Na tej samej gałęzi:
 
 ```bash
-cp app_fixed/UserController.java app/UserController.java
-sed -i '/stmt.setString/i\        // Bind user input as a SQL parameter.' app/UserController.java
-git diff -- app/UserController.java
-git add app/UserController.java
-git commit -m "demo: fix SQL injection with PreparedStatement"
+cp app_command_fixed/CommandController.java app/CommandController.java
+sed -i '/InetAddress address/i\        // Avoid a command shell for user-controlled input.' app/CommandController.java
+git diff -- app/CommandController.java
+git add app/CommandController.java
+git commit -m "demo: remove command injection"
 git push
 ```
 
-Pokaż placeholder `?`, `prepareStatement` i `setString`.
-Wyjaśnij, że wartość parametru jest przekazywana oddzielnie od składni SQL.
+Pokaż, że poprawka całkowicie usuwa `ProcessBuilder` oraz `sh -c`.
+`InetAddress.getByName(host)` i `isReachable(2000)` realizują potrzebną
+funkcję bez budowania polecenia systemowego.
 
 Sprawdź nowe uruchomienia **Actions**:
 
@@ -324,8 +345,7 @@ Sprawdź nowe uruchomienia **Actions**:
   a instalacja narzędzia działa.
 - Komentarz AI powinien zostać zaktualizowany i wskazywać nowy SHA.
 
-W sprawdzonej próbie AI potwierdziło brak SQL injection, ale zgłosiło również
-zarządzanie zasobami JDBC, walidację wejścia i brak widocznej autoryzacji.
+Po poprawce AI może nadal zasugerować walidację nazwy hosta albo obsługę błędów.
 Te uwagi nie muszą być błędne, jednak model widzi tylko diff i nie zna całej
 architektury. Wykorzystaj to jako przykład ograniczenia review AI: człowiek
 musi odróżnić błąd w zmianie od hipotezy wymagającej szerszego kontekstu.
@@ -335,7 +355,8 @@ na `main` i w PR-ze nie ma innych zmian, diff PR-a będzie pusty.
 Skrypt zaktualizuje komentarz informacją, że analiza AI nie została wykonana.
 To prawidłowy wynik, nie potwierdzenie wykonania drugiego review przez model.
 Jeżeli chcesz pokazać drugie wywołanie AI, przed commitem dodaj do poprawionej
-metody krótki, sensowny komentarz, np. `// Bind user input as a SQL parameter.`
+metody krótki, sensowny komentarz, np.
+`// Avoid a command shell for user-controlled input.`
 Wtedy PR zachowa niepusty diff względem bazy. Model ocenia bieżący diff PR-a,
 a nie wyłącznie ostatni commit i nie historię kolejnych poprawek.
 
@@ -361,11 +382,29 @@ Zdanie na koniec:
 > kontrolę konkretnych wzorców, AI dostarcza dodatkowych wskazówek,
 > a człowiek sprawdza wynik i decyduje o scaleniu.”
 
-## 5. Wariant dodatkowy: polityka infrastruktury, 2–3 minuty
+## 5. Alternatywny scenariusz: SQL injection
+
+Jeżeli zamiast command injection chcesz pokazać SQL injection, wykonaj
+analogiczny przebieg z plikiem `UserController.java`:
+
+```bash
+cp app_vuln/UserController.java app/UserController.java
+# commit, push i utworzenie PR-a
+
+cp app_fixed/UserController.java app/UserController.java
+# dodaj komentarz zachowujący diff, commit i push poprawki
+```
+
+Semgrep użyje `rules/java-sqli-demo.yml`. Podatna wersja konkatenatuje
+`userId` do SQL, a poprawka korzysta z `PreparedStatement` i parametru `?`.
+Nie łącz obu podatności w jednym PR-ze prezentacyjnym — wynik będzie mniej czytelny.
+
+## 6. Wariant dodatkowy: polityka infrastruktury, 2–3 minuty
 
 Na osobnej gałęzi utworzonej z bezpiecznego `main` usuń tylko
 `resources.limits.memory` z `infra/deployment.yaml`, wyślij zmianę i otwórz PR.
-Nie dodawaj jednocześnie SQL injection, aby Semgrep nie zatrzymał joba wcześniej.
+Nie dodawaj jednocześnie command injection ani SQL injection, aby Semgrep
+nie zatrzymał joba wcześniej.
 
 Oczekiwany wynik: Semgrep przechodzi, a Conftest zgłasza
 `Container must define memory limit`. Przywróć `memory: "256Mi"` pod
@@ -375,7 +414,7 @@ wyniku. Zamknij PR po pokazie.
 To osobna kontrola polityki zasobów — manifest jest materiałem do testu
 Conftest, a workflow nie wdraża go do klastra Kubernetes.
 
-## 6. Rozwiązywanie problemów podczas próby
+## 7. Rozwiązywanie problemów podczas próby
 
 | Objaw | Co sprawdzić |
 | --- | --- |
@@ -389,7 +428,7 @@ Conftest, a workflow nie wdraża go do klastra Kubernetes.
 | Błąd modelu / HTTP 404 | Sprawdź dostęp konta do modelu oraz `OPENAI_REVIEW_MODEL`. |
 | `ai_review.py` nie istnieje | Skrypt musi być obecny w bazie PR-a, nie tylko na jego gałęzi. |
 | Review odrzucone jako nieaktualne | Wysłano nowszy commit lub zamknięto PR; sprawdź najnowsze uruchomienie. |
-| SQL injection, ale Semgrep zielony | Sprawdź `--error`, lokalną regułę, skanowanie `app/` oraz SHA uruchomienia. |
+| Command injection, ale Semgrep zielony | Sprawdź `--config rules/`, `--error`, plik `app/CommandController.java` oraz SHA uruchomienia. |
 | Błąd pobierania Conftest | Sprawdź log instalacji i adres wydania; to nie wynik polityki. |
 | Brak ponownej analizy AI po poprawce | Sprawdź, czy PR ma jeszcze niepusty diff względem bazy. |
 | AI odpowiada po angielsku lub używa nieoczekiwanego formatu | To możliwy wynik modelu; oceniaj treść, a nie układ odpowiedzi. |
@@ -401,7 +440,7 @@ wyraźnie zaznaczając, że pochodzi z poprzedniego uruchomienia.
 Workflow AI nie ma deterministycznego fallbacku; taki fallback występuje
 w osobnym `ai_fix.py`, a nie w `ai_review.py`.
 
-## 7. Limity skonfigurowane w tym demo
+## 8. Limity skonfigurowane w tym demo
 
 - Maksymalny czas joba review: 5 minut.
 - Najwyżej jedno wywołanie modelu na uruchomienie skryptu.
@@ -411,14 +450,14 @@ w osobnym `ai_fix.py`, a nie w `ai_review.py`.
 - API OpenAI jest rozliczane osobno od GitHub Actions.
 - To nie jest miesięczny limit wydatków; każdy nowy commit może uruchomić review.
 
-## 8. Ściąga dla prowadzącego
+## 9. Ściąga dla prowadzącego
 
 1. Przed pokazem: workflow i reviewer na `main`, sekret dodany, próba udana.
 2. Otwórz awaryjne materiały z PR #1 w osobnych kartach.
 3. Pokaż YAML i polecenie `python3 ai_review.py`.
-4. Nowa gałąź → skopiuj `app_vuln` do `app` → commit → push → PR.
+4. Nowa gałąź → skopiuj `app_command_vuln` do `app` → commit → push → PR.
 5. Pokaż czerwony Semgrep oraz komentarz AI **przed wysłaniem poprawki**.
-6. Skopiuj `app_fixed` do `app`, dodaj komentarz zachowujący diff → commit → push.
+6. Skopiuj `app_command_fixed` do `app`, dodaj komentarz zachowujący diff → commit → push.
 7. Pokaż zielone Semgrep i Conftest, nowy SHA oraz zaktualizowany komentarz AI.
 8. Omów dodatkowe uwagi AI jako przykład ograniczonego kontekstu.
 9. Zamknij demonstracyjny PR bez scalania.
