@@ -25,7 +25,7 @@ jobs:
         run: python3 -m pip install semgrep==1.183.0
 
       - name: Run Semgrep
-        run: semgrep scan --error --config rules/java-sqli-demo.yml app/
+        run: semgrep scan --error --config rules/ app/
 
       - name: Install Conftest
         run: |
