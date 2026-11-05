@@ -11,8 +11,8 @@ i weryfikacji poprawki.
 
 > [!WARNING]
 > To repozytorium jest materiałem edukacyjnym. Zawiera celowo podatny kod,
-> stare zależności, ryzykowne IaC oraz syntetyczne sekrety. Nie wdrażaj przykładów
-> z katalogów `*_vuln/` ani `vuln/` w środowisku produkcyjnym.
+> używany wyłącznie do demonstracji działania skanerów. Nie wdrażaj przykładów
+> z katalogów `*_vuln/` w środowisku produkcyjnym.
 
 ## Historia, którą opowiada demo
 
@@ -237,7 +237,6 @@ infra/                   manifest Kubernetes
 policies/                polityki Conftest/Rego
 tests/                   testy ai_review.py bez sieci i kluczy
 decks/                   slajdy z konferencji
-vuln/                    dodatkowe, celowo podatne przykłady zewnętrzne
 ```
 
 ## Slajdy i instrukcja prowadzącego
@@ -263,11 +262,8 @@ aktualność SHA oraz tworzenie i aktualizowanie komentarza.
 - `store: false` wyłącza zapis odpowiedzi jako zasobu Responses; nie jest
   obietnicą zerowej retencji wszystkich danych API.
 - Prompt ogranicza prompt injection, ale nie gwarantuje poprawności modelu.
-- Celowo podatny kod i syntetyczne sekrety mogą uruchamiać skanery — to
+- Celowo podatny kod może uruchamiać skanery — to
   oczekiwany wynik tego repozytorium.
-- `vuln/` pochodzi z projektu
-  [dehvCurtis/vulnerable-code-examples](https://github.com/dehvCurtis/vulnerable-code-examples)
-  i służy wyłącznie jako dodatkowy materiał szkoleniowy.
 - Repozytorium nie uruchamia podatnych przykładów w GitHub Actions.
 
 ## Materiały konferencyjne i dalsze użycie
@@ -279,5 +275,5 @@ za decyzję o merge'u.
 
 ## Licencja
 
-Repozytorium nie ma jeszcze zadeklarowanej licencji. Przed ponownym użyciem
-materiałów poza własnym demo skontaktuj się z autorem repozytorium.
+Kod i materiały w tym repozytorium są dostępne na licencji
+[MIT](LICENSE).
