@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
 APP_DIR="${1:-app}"
 
@@ -21,16 +21,13 @@ else
 fi
 echo ""
 
-echo "===> [1/4] Build"
-echo "Build OK"
-
-echo "===> [2/4] SAST - Semgrep"
+echo "===> [1/3] SAST - Semgrep"
 if semgrep scan --error --config rules/java-sqli-demo.yml "$APP_DIR"; then
   echo "No security findings"
 else
   echo ""
   echo "🤖 Findings detected"
-  echo "===> [3/4] Running AI fix"
+  echo "===> [2/3] Running AI fix"
   python3 ai_fix.py "$APP_DIR"
 
   echo ""
@@ -39,7 +36,7 @@ else
 fi
 
 echo ""
-echo "===> [4/4] Policy check - Conftest"
+echo "===> [3/3] Policy check - Conftest"
 conftest test --rego-version v1 infra/deployment.yaml --policy policies/
 
 echo ""

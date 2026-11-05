@@ -1,4 +1,12 @@
 # vulnerable-code-examples
+
+> **Warning**
+> This directory intentionally contains vulnerable code, insecure infrastructure
+> examples, outdated dependencies, and synthetic secrets for training scanners.
+> Do not deploy or copy these examples into production systems.
+
+Source: [dehvCurtis/vulnerable-code-examples](https://github.com/dehvCurtis/vulnerable-code-examples).
+
 ## Description
 This repo contains a variety of code samples of vulnerability, dependency and risk.
 

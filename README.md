@@ -1,173 +1,283 @@
-# Demo: Security is Architecture + AI Fix
+# Secure SDLC Pipeline Demo
 
-To repo zawiera 2 tryby:
+[![Security pipeline](https://github.com/tswierszcz/future-pipeline/actions/workflows/demo.yml/badge.svg?branch=main)](https://github.com/tswierszcz/future-pipeline/actions/workflows/demo.yml)
 
-1. `pipeline_fail.sh`  
-   Pokazuje klasyczny fail pipeline po wykryciu podatności przez Semgrep.
+Praktyczne demo pokazujące, jak GitHub Actions, Semgrep, Conftest i review AI
+współpracują przy pull requeście — od wykrycia podatności do zablokowania merge'a
+i weryfikacji poprawki.
 
-2. `pipeline_ai_fix.sh`  
-   Pokazuje flow:
-   - Semgrep wykrywa problem
-   - AI próbuje naprawić kod
-   - Semgrep uruchamia się ponownie
-   - pipeline przechodzi dalej
+> **English summary:** a hands-on Secure SDLC demo with deterministic Semgrep and
+> Conftest gates plus advisory AI code review in GitHub Actions.
 
-GitHub Actions zawiera również dwa gotowe scenariusze SAST:
+> [!WARNING]
+> To repozytorium jest materiałem edukacyjnym. Zawiera celowo podatny kod,
+> stare zależności, ryzykowne IaC oraz syntetyczne sekrety. Nie wdrażaj przykładów
+> z katalogów `*_vuln/` ani `vuln/` w środowisku produkcyjnym.
 
-- SQL injection w `app_vuln/UserController.java`;
-- command injection w `app_command_vuln/CommandController.java`.
+## Historia, którą opowiada demo
 
-Bezpieczne wersje znajdują się odpowiednio w `app_fixed/` i
-`app_command_fixed/`. Workflow skanuje katalog `app/` wszystkimi lokalnymi
-regułami z `rules/`.
+Samo dodanie skanera nie tworzy Secure SDLC. Kontrole muszą być częścią
+architektury procesu: uruchamiać się na każdej zmianie, dawać powtarzalny wynik,
+blokować merge przy naruszeniu polityki i pozostawiać decyzję człowiekowi.
 
-## Wymagania
+W tym repozytorium programista wprowadza command injection do zwykłego PR-a:
 
-- semgrep
-- conftest
-- bash
-- python 3.10+
+1. Semgrep znajduje niebezpieczne `sh -c` i ustawia wymagany check na czerwono.
+2. Ochrona `main` blokuje merge.
+3. Review AI opisuje scenariusz ataku i proponuje bezpieczniejsze API.
+4. Programista usuwa uruchamianie powłoki.
+5. Semgrep i Conftest przechodzą, a komentarz AI zostaje zaktualizowany.
 
-Opcjonalnie:
-- `OPENAI_API_KEY` jeśli chcesz użyć prawdziwego modelu OpenAI
-- pakiet Python `openai`:
-```bash
-python3 -m pip install openai
+### Zobacz działający przykład
+
+- [PR #4 — celowo czerwony command injection](https://github.com/tswierszcz/future-pipeline/pull/4)
+- [log Semgrep z blokującym wykryciem](https://github.com/tswierszcz/future-pipeline/actions/runs/41824508984)
+- [komentarz AI do podatnej zmiany](https://github.com/tswierszcz/future-pipeline/pull/4#issuecomment-6629891017)
+- [szczegółowy scenariusz prowadzenia prezentacji](GITHUBACTIONS.Md)
+
+Nie scalaj PR #4 — jego czerwony stan jest częścią demonstracji.
+
+## Jak płynie zmiana
+
+```mermaid
+flowchart LR
+    A[Commit i pull request] --> B[Semgrep SAST]
+    B -->|finding| X[Merge zablokowany]
+    B -->|pass| C[Conftest policy as code]
+    C -->|deny| X
+    C -->|pass| E[Kontrole deterministyczne zielone]
+    A --> D[AI review diffu]
+    D --> F[Komentarz doradczy]
+    E --> G[Decyzja człowieka]
+    F --> G
 ```
 
-Bez `OPENAI_API_KEY` skrypt przejdzie na przewidywalny fallback demo.
-Jeśli `OPENAI_API_KEY` jest ustawiony, ale pakiet `openai` nie jest zainstalowany, skrypt też przejdzie na fallback demo.
+| Warstwa | Rola | Blokuje merge? |
+| --- | --- | --- |
+| Semgrep | Wykrywa command injection i SQL injection lokalnymi regułami | Tak |
+| Conftest | Sprawdza limity CPU i pamięci w manifeście Kubernetes | Tak |
+| AI review | Analizuje diff i aktualizuje jeden komentarz w PR-ze | Nie |
+| Branch protection | Wymaga zielonego `security-pipeline` | Tak |
+| Człowiek | Ocenia kontekst, false positives i sens poprawki | Podejmuje decyzję |
 
-## Uruchomienie
-Idz do katalgou src
+## Najszybszy start — własny czerwony PR
+
+1. Zrób fork repozytorium i sklonuj **swój fork**.
+2. Utwórz gałąź demonstracyjną i podmień bezpieczny plik na podatny:
+
 ```bash
-source venv/bin/activate
+git switch main
+git pull --ff-only
+git switch -c demo/command-injection
+cp app_command_vuln/CommandController.java app/CommandController.java
+git add app/CommandController.java
+git commit -m "demo: introduce command injection"
+git push -u origin demo/command-injection
 ```
 
-Nadaj prawa:
+3. Otwórz PR z `demo/command-injection` do `main` **w swoim forku**.
+4. Otwórz czerwony check `security-pipeline` i znajdź regułę
+   `java-command-injection-demo`.
+
+Semgrep i Conftest nie wymagają sekretów. Review AI bez `OPENAI_API_KEY`
+zostanie jawnie pominięte w logu.
+
+### Włącz review AI w swoim forku
+
+Dodaj sekret repozytorium bez umieszczania klucza w historii poleceń:
+
 ```bash
-chmod +x pipeline_fail.sh pipeline_ai_fix.sh
+gh secret set OPENAI_API_KEY --repo TWOJ_LOGIN/future-pipeline
+gh secret list --repo TWOJ_LOGIN/future-pipeline
 ```
 
-### 1. Wersja fail
+Opcjonalnie ustaw model:
+
 ```bash
+gh variable set OPENAI_REVIEW_MODEL \
+  --body "gpt-4.1-mini" \
+  --repo TWOJ_LOGIN/future-pipeline
+```
+
+Workflow AI działa dla gotowych PR-ów z gałęzi tego samego repozytorium.
+PR-y z zewnętrznych forków, drafty i Dependabot są pomijane, aby nie udostępniać
+sekretów niezaufanemu kodowi.
+
+### Napraw podatność
+
+Na tej samej gałęzi przywróć bezpieczną implementację:
+
+```bash
+cp app_command_fixed/CommandController.java app/CommandController.java
+```
+
+Dodaj wewnątrz metody krótki komentarz, aby PR zachował niepusty diff względem
+`main`, na przykład:
+
+```java
+// Avoid a command shell for user-controlled input.
+```
+
+Następnie wyślij poprawkę:
+
+```bash
+git add app/CommandController.java
+git commit -m "demo: remove command injection"
+git push
+```
+
+Semgrep i Conftest powinny przejść. AI aktualizuje istniejący komentarz zamiast
+tworzyć nowy, dlatego pokaż lub zapisz podatną analizę przed wysłaniem poprawki.
+
+## Uruchomienie lokalne
+
+Wymagania:
+
+- Bash i Python 3.10+;
+- [Semgrep](https://semgrep.dev/docs/getting-started/);
+- [Conftest](https://www.conftest.dev/install/);
+- opcjonalnie pakiet `openai` i klucz API dla automatycznej poprawki SQL.
+
+Przykładowe środowisko Pythona:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install --upgrade pip
+python3 -m pip install semgrep==1.183.0
+```
+
+Po zainstalowaniu Conftest uruchom:
+
+```bash
+# Oczekiwany PASS: bezpieczny kod + poprawna polityka Kubernetes
+./pipeline.sh
+
+# Oczekiwany FAIL: command injection wykryte lokalną regułą
 ./pipeline_fail.sh
 ```
 
-### 2. Wersja AI fix
-```bash
-./pipeline_ai_fix.sh
-```
+Skrypty wykonują SAST i policy check. Pliki Java są małymi przykładami,
+a nie kompletnym projektem Maven/Gradle.
 
-Z prawdziwym wywołaniem OpenAI:
+### Opcjonalny AI fix dla SQL injection
+
+`pipeline_ai_fix.sh` modyfikuje wskazany `UserController.java`. Użyj katalogu
+tymczasowego, aby nie zmieniać szablonu w repozytorium:
+
 ```bash
-export OPENAI_API_KEY=...
+DEMO_DIR="$(mktemp -d)"
+cp -R app_vuln "$DEMO_DIR/app"
+
+# Bez klucza zostanie użyta deterministyczna poprawka demonstracyjna.
+./pipeline_ai_fix.sh "$DEMO_DIR/app"
+
+# Z prawdziwym API — wpisany klucz nie pojawi się w historii poleceń:
 python3 -m pip install openai
-./pipeline_ai_fix.sh
+read -rsp "OPENAI_API_KEY: " OPENAI_API_KEY
+export OPENAI_API_KEY
+echo
+./pipeline_ai_fix.sh "$DEMO_DIR/app"
+unset OPENAI_API_KEY
 ```
 
-### 3. Wersja PASS na poprawionym kodzie
-```bash
-./pipeline_fail.sh app_fixed
+Nie zapisuj klucza w pliku, commicie ani historii terminala współdzielonego
+z innymi osobami.
+
+## Gotowe scenariusze
+
+| Scenariusz | Podatny szablon | Bezpieczny szablon | Reguła |
+| --- | --- | --- | --- |
+| Command injection | `app_command_vuln/CommandController.java` | `app_command_fixed/CommandController.java` | `rules/java-command-injection-demo.yml` |
+| SQL injection | `app_vuln/UserController.java` | `app_fixed/UserController.java` | `rules/java-sqli-demo.yml` |
+| Kubernetes policy | usuń limit z `infra/deployment.yaml` | `infra/deployment.yaml` | `policies/deployment.rego` |
+
+Katalog `app/` jest bezpiecznym punktem startowym skanowanym przez workflow.
+Katalogi `*_vuln/` są tylko szablonami i nie są wdrażane.
+
+## GitHub Actions
+
+### Deterministyczna bramka bezpieczeństwa
+
+`.github/workflows/demo.yml` uruchamia się dla PR-ów i pushy do `main`:
+
+1. instaluje przypiętą wersję Semgrep;
+2. skanuje `app/` wszystkimi lokalnymi regułami z `rules/`;
+3. przy braku findingów instaluje Conftest;
+4. sprawdza `infra/deployment.yaml` regułami Rego.
+
+Job `security-pipeline` jest wymaganym statusem w ochronie gałęzi `main`.
+
+### Doradcze review AI
+
+`.github/workflows/ai-review.yml` uruchamia `ai_review.py` z commita bazowego PR-a,
+nie z kodu dostarczonego przez autora zmiany. Skrypt:
+
+- pobiera diff przez GitHub REST API;
+- ogranicza wejście do 40 000 znaków i odpowiedź do 2500 tokenów;
+- wysyła najwyżej jedno żądanie do OpenAI Responses API;
+- używa `store: false`;
+- przed publikacją sprawdza, czy PR nadal wskazuje analizowany SHA;
+- tworzy lub aktualizuje jeden komentarz bota.
+
+Review AI jest celowo nieblokujące. Model może przeoczyć błąd, zmienić język
+odpowiedzi lub zgłosić uwagę wymagającą szerszego kontekstu.
+
+## Struktura repozytorium
+
+```text
+.github/workflows/       GitHub Actions: security gate i AI review
+app/                     bezpieczny kod skanowany w CI
+app_command_vuln/        szablon command injection
+app_command_fixed/       poprawka bez wywoływania powłoki
+app_vuln/                szablon SQL injection
+app_fixed/               poprawka z PreparedStatement
+rules/                   lokalne reguły Semgrep
+infra/                   manifest Kubernetes
+policies/                polityki Conftest/Rego
+tests/                   testy ai_review.py bez sieci i kluczy
+decks/                   slajdy z konferencji
+vuln/                    dodatkowe, celowo podatne przykłady zewnętrzne
 ```
 
-## Ważne
+## Slajdy i instrukcja prowadzącego
 
-`app/` jest katalogiem roboczym.  
-Skrypt `pipeline_ai_fix.sh` nadpisuje `app/UserController.java`.
+- [slajdy po polsku](decks/Pipeline_2.0_PL.pdf)
+- [slides in English](decks/Pipeline_2.0_EN.pdf)
+- [pełny scenariusz prezentacji](GITHUBACTIONS.Md)
 
-Jeśli chcesz wrócić do wersji podatnej:
-```bash
-cp app_vuln/UserController.java app/UserController.java
-```
+## Testy
 
-## AI review pull requestów w GitHub Actions
-
-Workflow `.github/workflows/ai-review.yml` analizuje diff PR-a przez OpenAI
-i publikuje jeden komentarz po polsku. Kolejne commity aktualizują ten sam
-komentarz. Review jest doradcze: nie zatwierdza PR-a, nie zmienia kodu i nie
-blokuje scalenia z powodu uwag modelu. Błąd API jest widoczny w logu kroku,
-ale dzięki `continue-on-error` nie blokuje joba. Nie ustawiaj tego workflow
-jako wymaganej kontroli bezpieczeństwa.
-
-### Konfiguracja
-
-1. Umieść zawartość tego katalogu w głównym katalogu repozytorium GitHub
-   (tak, aby `.github/workflows/` było bezpośrednio w jego katalogu głównym).
-2. Dodaj i scal te pliki do gałęzi docelowej, zanim otworzysz demonstracyjny PR.
-   Workflow uruchamia `ai_review.py` z commita bazowego PR-a, a nie z jego kodu.
-3. W **Settings → Secrets and variables → Actions → Secrets** dodaj sekret
-   `OPENAI_API_KEY` z kluczem konta API posiadającego dostęp do modelu i środki.
-4. Opcjonalnie w zakładce **Variables** ustaw `OPENAI_REVIEW_MODEL`.
-   Domyślnie używany jest `gpt-4.1-mini`.
-5. Otwórz PR z gałęzi w tym samym repozytorium. Workflow uruchomi się przy
-   otwarciu, ponownym otwarciu, nowych commitach oraz oznaczeniu jako gotowy.
-
-Token `GITHUB_TOKEN` jest dostarczany automatycznie przez Actions. Workflow
-deklaruje `contents: read` oraz `pull-requests: write`, potrzebne do pobierania
-zmian i komentowania. Polityka organizacji musi pozwalać na te uprawnienia.
-Brak sekretu powoduje pominięcie analizy z komunikatem w logu. PR-y robocze,
-PR-y z forków i uruchomienia przez Dependabot są pomijane. Nie używamy
-`pull_request_target` ani nie wykonujemy kodu z PR-a.
-
-### Scenariusz prezentacji
-
-1. Zacznij od poprawionego `app/UserController.java` na gałęzi docelowej.
-2. Na nowej gałęzi wprowadź SQL injection:
-   `cp app_vuln/UserController.java app/UserController.java`.
-3. Zacommituj zmianę, wypchnij gałąź i otwórz PR. Sprawdź **Actions → AI PR review**
-   oraz komentarz z analizą i propozycją użycia `PreparedStatement`.
-4. Przywróć poprawkę przez `cp app_fixed/UserController.java app/UserController.java`,
-   zacommituj i wypchnij. Komentarz zostanie zaktualizowany dla nowego commita.
-
-Alternatywny scenariusz command injection:
-
-```bash
-cp app_command_vuln/CommandController.java app/CommandController.java
-# commit, push i utworzenie PR-a
-
-cp app_command_fixed/CommandController.java app/CommandController.java
-# commit i push poprawki
-```
-
-Podatna wersja przekazuje `host` do `sh -c`. Poprawiona wersja nie uruchamia
-powłoki i korzysta z `InetAddress.isReachable`.
-
-Model może przeoczyć błąd albo zgłosić nietrafioną uwagę. Wynik prezentacji
-nie jest deterministyczny. Semgrep i Conftest działają niezależnie;
-`demo.yml` uruchamia Semgrep z lokalną regułą i `--error` przy PR-ach oraz pushach do `main`.
-
-### Zakres i ograniczenia
-
-- Do API OpenAI trafiają nazwy plików i patche wraz z kontekstem dostarczonym
-  przez GitHub. Analiza nie pobiera całych plików ani całego repozytorium.
-  Wysyłaj wyłącznie kod, który możesz przekazać do tego API; sekretów nie
-  umieszczaj w commitach. `store: false` wyłącza przechowywanie odpowiedzi
-  jako zasobu Responses; nie jest deklaracją zerowej retencji wszystkich danych API.
-- Jedno uruchomienie wykonuje najwyżej jedno wywołanie modelu, z limitem
-  40 000 znaków wybranych patchy i 2500 tokenów odpowiedzi. To ograniczenie
-  rozmiaru, nie sztywny limit kosztu w walucie. Zbyt duże patche i pliki bez
-  patcha są pomijane i ujawniane w komentarzu. Przekroczenie limitu 3000 plików
-  GitHub kończy analizę błędem bez publikacji.
-- Kod i nazwy plików są niezaufanymi danymi. Prompt zabrania wykonywania
-  instrukcji zawartych w diffie, a model nie otrzymuje narzędzi ani tokenów.
-  To ogranicza skutki prompt injection, ale nie gwarantuje poprawności review.
-- Komentarz zawiera SHA analizowanego commita. Skrypt sprawdza aktualność PR-a
-  przed analizą i publikacją; kolejne uruchomienia dla tego PR-a anulują poprzednie.
-- Celowo podatne przykłady w `app_vuln/`, `app_command_vuln/` i `vuln/` są
-  oznaczone w instrukcji modelu jako materiał demonstracyjny.
-- Skrypt używa standardowej biblioteki Pythona 3.10+, bez dodatkowych pakietów.
-
-Nie zapisuj klucza w `pipeline_ai_fix.sh`; skrypt pobiera go teraz ze środowiska.
-Jeśli poprzednio zapisany klucz był prawdziwy, unieważnij go i utwórz nowy.
-Usunięcie go z pliku nie usuwa kopii z wcześniejszych commitów.
-
-Testy bez sieci i bez kluczy:
+Testy review AI nie wykonują połączeń sieciowych i nie potrzebują klucza:
 
 ```bash
 python3 -m unittest discover -s tests -v
 ```
 
-Dokumentacja API: [OpenAI — generowanie tekstu](https://developers.openai.com/api/docs/guides/text).
-Zdarzenia workflow: [GitHub — pull_request](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request).
-# future-pipeline
+Pokrywają między innymi limity diffu, brak sekretu, błędną odpowiedź API,
+aktualność SHA oraz tworzenie i aktualizowanie komentarza.
+
+## Bezpieczeństwo i ograniczenia
+
+- Kod z diffu trafia do API OpenAI tylko wtedy, gdy skonfigurujesz klucz.
+- `store: false` wyłącza zapis odpowiedzi jako zasobu Responses; nie jest
+  obietnicą zerowej retencji wszystkich danych API.
+- Prompt ogranicza prompt injection, ale nie gwarantuje poprawności modelu.
+- Celowo podatny kod i syntetyczne sekrety mogą uruchamiać skanery — to
+  oczekiwany wynik tego repozytorium.
+- `vuln/` pochodzi z projektu
+  [dehvCurtis/vulnerable-code-examples](https://github.com/dehvCurtis/vulnerable-code-examples)
+  i służy wyłącznie jako dodatkowy materiał szkoleniowy.
+- Repozytorium nie uruchamia podatnych przykładów w GitHub Actions.
+
+## Materiały konferencyjne i dalsze użycie
+
+Forkuj repo, odtwórz czerwony PR, dodaj własną regułę Semgrep albo politykę Rego
+i porównaj deterministyczny wynik narzędzia z komentarzem modelu. Najważniejszy
+wniosek pozostaje ten sam: AI pomaga wyjaśniać, ale reguły i człowiek odpowiadają
+za decyzję o merge'u.
+
+## Licencja
+
+Repozytorium nie ma jeszcze zadeklarowanej licencji. Przed ponownym użyciem
+materiałów poza własnym demo skontaktuj się z autorem repozytorium.

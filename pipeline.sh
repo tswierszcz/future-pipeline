@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
 # --- INPUT ---
-APP_DIR="${1:-app_fixed}"
+APP_DIR="${1:-app}"
 
 # --- VALIDATION ---
 if [ ! -d "$APP_DIR" ]; then
@@ -14,13 +14,10 @@ fi
 echo "===> Using app directory: $APP_DIR"
 
 # --- PIPELINE ---
-echo "===> [1/3] Build"
-echo "Build OK"
+echo "===> [1/2] SAST - Semgrep"
+semgrep scan --error --config rules/ "$APP_DIR"
 
-echo "===> [2/3] SAST - Semgrep"
-semgrep scan --error --config auto "$APP_DIR"
-
-echo "===> [3/3] Policy check - Conftest"
+echo "===> [2/2] Policy check - Conftest"
 conftest test --rego-version v1 infra/deployment.yaml --policy policies/
 
 echo "===> ✅ Pipeline OK"

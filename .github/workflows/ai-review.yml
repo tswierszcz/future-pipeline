@@ -22,11 +22,11 @@ jobs:
     timeout-minutes: 5
     steps:
       # Run trusted reviewer code from the base, never code supplied by the PR.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
       - name: Review diff and update PR comment
